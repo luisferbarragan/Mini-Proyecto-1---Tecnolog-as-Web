@@ -2,16 +2,25 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>intercambio de regalos</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Intercambio de regalos</title>
 
-    <!-- bootstrap -->
+    <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 
 <body>
     <header class="bg-dark text-white text-center p-3">
-        <h2>Intercambio de regalos</h2>
+        <div class="container">
+            <div class="d-flex flex-column flex-md-row align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <img src="assets/logo.png" width="45" height="45" alt="Logo">
+                    <h1 class="h4 mb-0">Intercambio de regalos</h1>
+                </div>
+                <small id="etiqueta-estado" class="text-muted">Cargando...</small>
+            </div>
+        </div>
     </header>
 
     <!-- contenedor-->
@@ -20,11 +29,11 @@
         <section id="inicio" class="pantalla">
             <div class="row justify-content-center">
                 <div class="col-12 col-md-8 col-lg-6 text-center">
-                    
-                    <img src="assets/logo.png" width="120">
-                    <h3 class="mt-3">organiza tu intercambio facilmente</h3>
-
-                    <button class="btn btn-primary mt-3" onclick="mostrarPantalla('configuracion')">crear evento</button>
+                    <img src="assets/logo.png" width="120" alt="Logo">
+                    <h3 class="mt-3">Organiza tu intercambio fácilmente</h3>
+                    <p class="text-muted">Crea el evento, registra participantes, define exclusiones y realiza el sorteo.</p>
+                    <button class="btn btn-primary mt-3" onclick="irAConfiguracion()">Crear evento</button>
+                    <button id="btn-continuar-evento" class="btn btn-outline-secondary mt-2 d-none" onclick="mostrarPantalla('resumen')">Continuar evento</button>
                 </div>
             </div>
         </section>
@@ -33,77 +42,172 @@
         <!-- pantalla de configuracion -->
         <section id="configuracion" class="pantalla d-none">
             <div class="row">
-                <div class="col-12 col-md-6">
-                    
-                    <h4>configuracion del evento</h4>
+                <div class="col-12 col-lg-8">
+                    <h4>Configuración del evento</h4>
 
-                    <label class="form-label">organizador</label>
-                    <input class="form-control" placeholder="nombre">
+                    <div class="mb-3">
+                        <label for="organizador-nombre" class="form-label">¿Quién organiza el intercambio?</label>
+                        <input id="organizador-nombre" type="text" class="form-control" placeholder="Nombre del organizador">
+                        <div class="form-text">El organizador puede participar o no en el sorteo.</div>
+                    </div>
 
-                    <label class="form-label mt-3">tipo de evento</label>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="organizador-incluido" checked>
+                        <label class="form-check-label" for="organizador-incluido">Incluir al organizador como participante</label>
+                    </div>
 
-                    <select class="form-control">
-                        <option>navidad</option>
-                        <option>cumpleanos</option>
-                        <option>amigos</option>
-                    </select>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de evento</label>
+                        <select id="tipo-evento" class="form-select">
+                            <option value="Navidad">Navidad</option>
+                            <option value="Cumpleaños">Cumpleaños</option>
+                            <option value="Amigos">Amigos</option>
+                            <option value="Otro">Otro...</option>
+                        </select>
+                    </div>
 
-                    <button class="btn btn-success mt-3" onclick="mostrarPantalla('participantes')">siguiente</button>
+                    <div id="celebracion-nombre-container" class="mb-3 d-none">
+                        <label for="celebracion-nombre" class="form-label">Nombre de la celebración</label>
+                        <input id="celebracion-nombre" class="form-control" type="text" placeholder="Ej. Amigo secreto 2026">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Fecha de celebración</label>
+                        <div id="fechas-opciones" class="d-flex flex-wrap gap-2"></div>
+                        <div class="mt-2">
+                            <label class="form-label">O seleccionar otra fecha</label>
+                            <input id="fecha-otro" type="date" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Presupuesto</label>
+                        <div class="d-flex flex-wrap gap-2" id="presupuesto-opciones">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-value="500">$500</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-value="1000">$1,000</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-value="2000">$2,000</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-value="otro">Otro</button>
+                        </div>
+                        <input id="presupuesto-otro" type="number" min="0" class="form-control mt-2 d-none" placeholder="Ingrese el presupuesto">
+                    </div>
+
+                    <div id="config-error" class="alert alert-danger d-none" role="alert"></div>
+
+                    <div class="d-flex flex-column flex-sm-row gap-2">
+                        <button class="btn btn-secondary" onclick="mostrarPantalla('inicio')">Volver al inicio</button>
+                        <button class="btn btn-success" onclick="guardarConfiguracionYContinuar()">Siguiente: Participantes</button>
+                    </div>
                 </div>
             </div>
         </section>
 
         <!-- pantalla de los participantes -->
         <section id="participantes" class="pantalla d-none">
-            <h4>participantes</h4>
-
             <div class="row">
+                <div class="col-12 col-lg-6">
+                    <h4>Participantes</h4>
 
-                <div class="col-12 col-md-6 col-lg-4">
-                    <div class="card p-3 mb-3">participante 1</div>
+                    <div class="input-group mb-3">
+                        <input id="participante-nombre" type="text" class="form-control" placeholder="Nombre del participante">
+                        <button class="btn btn-outline-primary" type="button" onclick="agregarParticipante()">Agregar</button>
+                    </div>
+                    <div id="participantes-error" class="text-danger mb-2" style="display:none"></div>
+
+                    <div id="lista-participantes" class="row g-2"></div>
+
+                    <div class="mt-3 d-flex gap-2">
+                        <button class="btn btn-secondary" onclick="mostrarPantalla('configuracion')">Volver</button>
+                        <button class="btn btn-success" onclick="continuarAExclusiones()">Siguiente: Exclusiones</button>
+                    </div>
                 </div>
-
-                <div class="col-12 col-md-6 col-lg-4">
-                    <div class="card p-3 mb-3">participante 2</div>
-                </div>
-
-                <div class="col-12 col-md-6 col-lg-4">
-                    <div class="card p-3 mb-3">participante 3</div>
-                </div>
-
             </div>
-
-            <button class="btn btn-primary" onclick="mostrarPantalla('exclusiones')">siguiente</button>
         </section>
 
         <!-- pantalla de las exclusiones -->
         <section id="exclusiones" class="pantalla d-none">
-            <h4>exclusiones</h4>
+            <h4>Exclusiones</h4>
 
-            <p>aqui ira el drag & drop</p>
+            <div class="mb-3">
+                <label class="form-label">¿Hay personas que no pueden regalarle a alguien en particular?</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tiene-exclusiones" id="excl-si" value="si">
+                    <label class="form-check-label" for="excl-si">Sí</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tiene-exclusiones" id="excl-no" value="no" checked>
+                    <label class="form-check-label" for="excl-no">No</label>
+                </div>
+            </div>
 
-            <button class="btn btn-primary" onclick="mostrarPantalla('resumen')">siguiente</button>
+            <div id="exclusiones-panel" class="d-none">
+                <p class="text-muted">Arrastra el nombre de quien regala hacia la persona a quien no puede regalar.</p>
+                <div class="row">
+                    <div class="col-12 col-md-6">
+                        <div class="card p-3 h-100">
+                            <h5 class="card-title">Quien regala</h5>
+                            <div id="drag-participantes" class="list-group"></div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="card p-3 h-100">
+                            <h5 class="card-title">No puede regalar a</h5>
+                            <div id="drop-participantes" class="list-group drop-zone"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <h6>Exclusiones definidas</h6>
+                    <div id="listado-exclusiones" class="d-flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-secondary" onclick="mostrarPantalla('participantes')">Volver</button>
+                <button class="btn btn-success" onclick="guardarExclusionesYContinuar()">Siguiente: Resumen</button>
+            </div>
         </section>
 
         <!-- pantalla del resumen -->
         <section id="resumen" class="pantalla d-none">
+            <h4>Datos del evento</h4>
 
-            <h4>datos del evento</h4>
+            <div id="resumen-contenido">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Detalles</h5>
+                        <p><strong>Organizador:</strong> <span id="resumen-organizador"></span></p>
+                        <p><strong>Tipo de evento:</strong> <span id="resumen-tipo"></span></p>
+                        <p><strong>Nombre celebración:</strong> <span id="resumen-celebracion"></span></p>
+                        <p><strong>Fecha:</strong> <span id="resumen-fecha"></span></p>
+                        <p><strong>Presupuesto:</strong> <span id="resumen-presupuesto"></span></p>
+                        <p><strong>Participantes:</strong> <span id="resumen-participantes"></span></p>
+                        <p><strong>Exclusiones:</strong> <span id="resumen-exclusiones"></span></p>
+                    </div>
+                </div>
+            </div>
 
-            <p>organizador:</p>
-            <p>fecha:</p>
-            <p>presupuesto:</p>
-
-            <button class="btn btn-success" onclick="mostrarPantalla('sorteo')">ir al sorteo</button>
-
+            <div class="d-flex gap-2">
+                <button class="btn btn-secondary" onclick="mostrarPantalla('exclusiones')">Volver</button>
+                <button class="btn btn-success" onclick="mostrarPantalla('sorteo')">Ir al sorteo</button>
+            </div>
         </section>
 
-        <!-- pantalla del sroteo -->
+        <!-- pantalla del sorteo -->
         <section id="sorteo" class="pantalla d-none">
-            <h4>sorteo</h4>
+            <h4>Sorteo</h4>
 
-            <button class="btn btn-danger">realizar sorteo</button>
+            <p class="text-muted">El sorteo asigna quién regala a quién respetando exclusiones.</p>
+            <div id="sorteo-error" class="alert alert-danger d-none"></div>
 
+            <button class="btn btn-danger mb-3" onclick="realizarSorteo()">Realizar sorteo</button>
+
+            <div id="resultados-sorteo" class="row gy-3"></div>
+
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-secondary" onclick="mostrarPantalla('resumen')">Volver al resumen</button>
+                <button class="btn btn-outline-primary" onclick="resetEvento()">Reiniciar evento</button>
+            </div>
         </section>
 
     </div>
