@@ -1,5 +1,29 @@
 const STORAGE_KEY = 'intercambioRegalos_evento';
 
+function createEmptyEvento() {
+  return {
+    organizador: { nombre: '', incluido: true },
+    evento: { tipo: 'Navidad', nombreCelebracion: '', fecha: '', presupuesto: 0 },
+    participantes: [],
+    exclusiones: [],
+    sorteo: []
+  };
+}
+
+function getStoredEvento() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return createEmptyEvento();
+  try {
+    return { ...createEmptyEvento(), ...JSON.parse(raw) };
+  } catch {
+    return createEmptyEvento();
+  }
+}
+
+function saveEvento(evento) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(evento));
+}
+
 function init() {
   setupEventListeners();
   renderFechaOpciones();
