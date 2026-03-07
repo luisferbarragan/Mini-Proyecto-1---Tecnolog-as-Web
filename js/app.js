@@ -175,6 +175,7 @@ function renderListaEventos() {
       <div class=\"d-flex gap-2 mt-2 mt-md-0\">
         <button class=\"btn btn-sm btn-outline-secondary\" onclick=\"cargarEvento('${ev.id}', 'resumen')\">Ver</button>
         <button class=\"btn btn-sm btn-primary\" onclick=\"cargarEvento('${ev.id}', 'configuracion')\">Editar</button>
+        <button class=\"btn btn-sm btn-outline-danger\" onclick=\"eliminarEvento('${ev.id}')\">Eliminar</button>
       </div>
     `;
     cont.appendChild(item);
@@ -201,6 +202,19 @@ function cargarEvento(id, destino = 'resumen') {
     renderResumen();
     mostrarPantalla('resumen');
   }
+}
+
+function eliminarEvento(id) {
+  if (!confirm('¿Estás seguro de que quieres eliminar este evento?')) return;
+  let events = loadEvents().filter(e => e.id !== id);
+  saveEvents(events);
+  if (state.id === id) {
+    state = createEmptyEvento();
+    localStorage.removeItem(CURRENT_EVENT_KEY);
+    mostrarPantalla('inicio');
+    setEstado('Evento eliminado. Nuevo evento listo.');
+  }
+  renderListaEventos();
 }
 
 function toggleCelebracionNombre() {
