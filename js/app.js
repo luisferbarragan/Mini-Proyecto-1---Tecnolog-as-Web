@@ -1,7 +1,18 @@
-const STORAGE_KEY = 'intercambioRegalos_evento';
+// App simplificada con estado central y helpers
+const STORAGE_KEY = 'intercambioRegalos_evento'; // compat: estado actual
+const EVENTS_KEY = 'intercambioRegalos_eventos'; // listado de eventos
+const CURRENT_EVENT_KEY = 'intercambioRegalos_actual';
+const $ = (id) => document.getElementById(id);
+const show = (id, on) => $(id).classList.toggle('d-none', !on);
+let state = getStoredEvento();
 
-function createEmptyEvento() {
+function generateId() {
+  return `ev-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createEmptyEvento(id = generateId()) {
   return {
+    id,
     organizador: { nombre: '', incluido: true },
     evento: { tipo: 'Navidad', nombreCelebracion: '', fecha: '', presupuesto: 0 },
     participantes: [],
@@ -10,79 +21,84 @@ function createEmptyEvento() {
   };
 }
 
-function getStoredEvento() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return createEmptyEvento();
+function loadEvents() {
+  const raw = localStorage.getItem(EVENTS_KEY);
+  if (!raw) return [];
   try {
-    return { ...createEmptyEvento(), ...JSON.parse(raw) };
+    return JSON.parse(raw);
   } catch {
-    return createEmptyEvento();
+    return [];
   }
 }
 
-function saveEvento(evento) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(evento));
+function saveEvents(events) {
+  localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
+}
+
+function getStoredEvento() {
+  // intenta usar el evento actual; si no hay, crea uno nuevo
+  const events = loadEvents();
+  const currentId = localStorage.getItem(CURRENT_EVENT_KEY);
+  let found = events.find(e => e.id === currentId);
+  if (!found && events.length) {
+    found = events[0];
+    localStorage.setItem(CURRENT_EVENT_KEY, found.id);
+  }
+  // compat con single evento guardado en STORAGE_KEY
+  if (!found) {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        const migrated = { id: generateId(), ...parsed };
+        events.push(migrated);
+        saveEvents(events);
+        localStorage.setItem(CURRENT_EVENT_KEY, migrated.id);
+        return migrated;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return found ? { ...createEmptyEvento(found.id), ...found } : createEmptyEvento();
+}
+
+function saveState() {
+  const events = loadEvents();
+  const idx = events.findIndex(e => e.id === state.id);
+  if (idx >= 0) events[idx] = state;
+  else events.push(state);
+  saveEvents(events);
+  localStorage.setItem(CURRENT_EVENT_KEY, state.id);
+}
+
+function setEstado(text) {
+  const label = $('etiqueta-estado');
+  if (label) label.textContent = text;
 }
 
 function init() {
   setupEventListeners();
   renderFechaOpciones();
   setupPresupuestoOpciones();
-  const evento = getStoredEvento();
-  setPresupuestoSeleccionado(evento.evento.presupuesto);
+  setPresupuestoSeleccionado(state.evento.presupuesto);
 
-  // Si hay fechas guardadas, resaltarlas
-  if (evento.evento.fecha) {
-    document.getElementById('fecha-otro').value = evento.evento.fecha;
-    highlightFechaSeleccionada(evento.evento.fecha);
+  if (state.evento.fecha) {
+    $('fecha-otro').value = state.evento.fecha;
+    highlightFechaSeleccionada(state.evento.fecha);
   }
 
-  if (evento.organizador.nombre) {
+  if (state.organizador.nombre) {
     setEstado('Evento cargado. Puedes continuar desde el resumen.');
-    document.getElementById('btn-continuar-evento').classList.remove('d-none');
     renderResumen();
   } else {
     setEstado('Bienvenido. Comienza creando tu evento.');
   }
 }
 
-function setEstado(text) {
-  const label = document.getElementById('etiqueta-estado');
-  if (label) label.textContent = text;
-}
-
-function getStoredEvento() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return createEmptyEvento();
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    return { ...createEmptyEvento(), ...parsed };
-  } catch (error) {
-    console.warn('No se pudo leer eventos de LocalStorage:', error);
-    return createEmptyEvento();
-  }
-}
-
-function createEmptyEvento() {
-  return {
-    organizador: { nombre: '', incluido: true },
-    evento: { tipo: 'Navidad', nombreCelebracion: '', fecha: '', presupuesto: 0 },
-    participantes: [],
-    exclusiones: [],
-    sorteo: []
-  };
-}
-
-function saveEvento(evento) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(evento));
-}
-
 function mostrarPantalla(id) {
-  const pantallas = document.querySelectorAll('.pantalla');
-  pantallas.forEach(p => p.classList.add('d-none'));
-  document.getElementById(id).classList.remove('d-none');
+  document.querySelectorAll('.pantalla').forEach(p => p.classList.add('d-none'));
+  $(id).classList.remove('d-none');
 
   if (id === 'resumen') renderResumen();
   if (id === 'participantes') renderParticipantes();
@@ -92,44 +108,98 @@ function mostrarPantalla(id) {
 
 function irAConfiguracion() {
   mostrarPantalla('configuracion');
-  const evento = getStoredEvento();
-  document.getElementById('organizador-nombre').value = evento.organizador.nombre || '';
-  document.getElementById('organizador-incluido').checked = evento.organizador.incluido;
-  document.getElementById('tipo-evento').value = evento.evento.tipo || 'Navidad';
+  $('organizador-nombre').value = state.organizador.nombre || '';
+  $('organizador-incluido').checked = state.organizador.incluido;
+  $('tipo-evento').value = state.evento.tipo || 'Navidad';
   toggleCelebracionNombre();
-  document.getElementById('celebracion-nombre').value = evento.evento.nombreCelebracion || '';
-  document.getElementById('fecha-otro').value = evento.evento.fecha || '';
-  setPresupuestoSeleccionado(evento.evento.presupuesto);
+  $('celebracion-nombre').value = state.evento.nombreCelebracion || '';
+  $('fecha-otro').value = state.evento.fecha || '';
+  setPresupuestoSeleccionado(state.evento.presupuesto);
 }
 
 function setupEventListeners() {
-  document.getElementById('tipo-evento').addEventListener('change', toggleCelebracionNombre);
-  document.getElementById('fecha-otro').addEventListener('change', () => selectFecha('otro', document.getElementById('fecha-otro').value));
-  document.getElementById('organizador-incluido').addEventListener('change', () => {
-    const evento = getStoredEvento();
-    evento.organizador.incluido = document.getElementById('organizador-incluido').checked;
-    saveEvento(evento);
+  $('tipo-evento').addEventListener('change', toggleCelebracionNombre);
+  $('fecha-otro').addEventListener('change', () => selectFecha('otro', $('fecha-otro').value));
+  $('organizador-incluido').addEventListener('change', () => {
+    state.organizador.incluido = $('organizador-incluido').checked;
+    saveState();
   });
-
-  document.getElementById('excl-si').addEventListener('change', () => togglePanelExclusiones(true));
-  document.getElementById('excl-no').addEventListener('change', () => togglePanelExclusiones(false));
+  $('excl-si').addEventListener('change', () => togglePanelExclusiones(true));
+  $('excl-no').addEventListener('change', () => togglePanelExclusiones(false));
+  $('btn-toggle-eventos')?.addEventListener('click', toggleListaEventos);
 }
 
-function toggleCelebracionNombre() {
-  const tipo = document.getElementById('tipo-evento').value;
-  const container = document.getElementById('celebracion-nombre-container');
-  if (tipo === 'Otro') {
-    container.classList.remove('d-none');
+function toggleListaEventos() {
+  const cont = $('eventos-guardados');
+  const isHidden = cont?.classList.contains('d-none');
+  if (isHidden) {
+    renderListaEventos();
+    show('eventos-guardados', true);
   } else {
-    container.classList.add('d-none');
+    show('eventos-guardados', false);
   }
 }
 
+function renderListaEventos() {
+  const cont = $('eventos-lista');
+  if (!cont) return;
+  const events = loadEvents();
+  cont.innerHTML = '';
+  if (!events.length) {
+    cont.innerHTML = '<div class=\"text-muted\">No hay eventos guardados.</div>';
+    return;
+  }
+  events.forEach(ev => {
+    const titulo = ev.evento?.nombreCelebracion || ev.evento?.tipo || 'Sin titulo';
+    const fecha = ev.evento?.fecha || 'Sin fecha';
+    const item = document.createElement('div');
+    item.className = 'list-group-item d-flex flex-column flex-md-row align-items-md-center justify-content-md-between';
+    item.innerHTML = `
+      <div>
+        <div class=\"fw-bold\">${titulo}</div>
+        <div class=\"small text-muted\">${fecha}</div>
+      </div>
+      <div class=\"d-flex gap-2 mt-2 mt-md-0\">
+        <button class=\"btn btn-sm btn-outline-secondary\" onclick=\"cargarEvento('${ev.id}', 'resumen')\">Ver</button>
+        <button class=\"btn btn-sm btn-primary\" onclick=\"cargarEvento('${ev.id}', 'configuracion')\">Editar</button>
+      </div>
+    `;
+    cont.appendChild(item);
+  });
+}
+
+function crearNuevoEvento() {
+  state = createEmptyEvento();
+  saveState();
+  setEstado('Nuevo evento listo para configurar.');
+  irAConfiguracion();
+  show('eventos-guardados', false);
+}
+
+function cargarEvento(id, destino = 'resumen') {
+  const found = loadEvents().find(e => e.id === id);
+  if (!found) return;
+  state = { ...createEmptyEvento(found.id), ...found };
+  saveState();
+  setEstado('Evento cargado.');
+  if (destino === 'configuracion') {
+    irAConfiguracion();
+  } else {
+    renderResumen();
+    mostrarPantalla('resumen');
+  }
+}
+
+function toggleCelebracionNombre() {
+  const tipo = $('tipo-evento').value;
+  const container = $('celebracion-nombre-container');
+  container.classList.toggle('d-none', tipo !== 'Otro');
+}
+
 function renderFechaOpciones() {
-  const cont = document.getElementById('fechas-opciones');
+  const cont = $('fechas-opciones');
   cont.innerHTML = '';
   const fechas = generarFechasProximas(3);
-  const evento = getStoredEvento();
 
   fechas.forEach((f, index) => {
     const btn = document.createElement('button');
@@ -139,50 +209,38 @@ function renderFechaOpciones() {
     btn.dataset.fecha = f.value;
     btn.addEventListener('click', () => {
       selectFecha('predefinida', f.value);
-      document.getElementById('fecha-otro').value = '';
+      $('fecha-otro').value = '';
       highlightFechaSeleccionada(f.value);
     });
     cont.appendChild(btn);
 
-    // Si no hay fecha guardada, pre-seleccionar la primera opción
-    if (!evento.evento.fecha && index === 0) {
+    if (!state.evento.fecha && index === 0) {
       selectFecha('predefinida', f.value);
       highlightFechaSeleccionada(f.value);
     }
   });
 
-  // Si hay fecha guardada, resaltarla
-  if (evento.evento.fecha) {
-    highlightFechaSeleccionada(evento.evento.fecha);
-  }
+  if (state.evento.fecha) highlightFechaSeleccionada(state.evento.fecha);
 }
 
 function highlightFechaSeleccionada(value) {
-  const botones = document.querySelectorAll('#fechas-opciones button');
-  botones.forEach(b => {
+  document.querySelectorAll('#fechas-opciones button').forEach(b => {
     b.classList.toggle('active', b.dataset.fecha === value);
   });
 }
 
 function selectFecha(type, value) {
-  const evento = getStoredEvento();
-  if (type === 'predefinida') {
-    evento.evento.fecha = value;
-  } else if (type === 'otro') {
-    evento.evento.fecha = value;
-    highlightFechaSeleccionada(value);
-  }
-  saveEvento(evento);
+  if (!value) return;
+  state.evento.fecha = value;
+  saveState();
+  if (type === 'otro') highlightFechaSeleccionada(value);
 }
 
 function generarFechasProximas(cantidad) {
   const fechas = [];
   const hoy = new Date();
   let current = new Date(hoy);
-  // Buscar el próximo sábado
-  while (current.getDay() !== 6) {
-    current.setDate(current.getDate() + 1);
-  }
+  while (current.getDay() !== 6) current.setDate(current.getDate() + 1); // proximo sabado
   for (let i = 0; i < cantidad; i++) {
     const dia = new Date(current);
     fechas.push({
@@ -195,90 +253,70 @@ function generarFechasProximas(cantidad) {
 }
 
 function setupPresupuestoOpciones() {
-  const botones = document.querySelectorAll('#presupuesto-opciones button');
-  botones.forEach(btn => {
+  document.querySelectorAll('#presupuesto-opciones button').forEach(btn => {
     btn.addEventListener('click', () => {
       const value = btn.dataset.value;
       if (value === 'otro') {
-        document.getElementById('presupuesto-otro').classList.remove('d-none');
-        document.getElementById('presupuesto-otro').focus();
+        $('presupuesto-otro').classList.remove('d-none');
+        $('presupuesto-otro').focus();
         setPresupuestoSeleccionado(null);
       } else {
-        document.getElementById('presupuesto-otro').classList.add('d-none');
-        document.getElementById('presupuesto-otro').value = '';
+        $('presupuesto-otro').classList.add('d-none');
+        $('presupuesto-otro').value = '';
         setPresupuestoSeleccionado(Number(value));
       }
     });
   });
 
-  document.getElementById('presupuesto-otro').addEventListener('input', (event) => {
+  $('presupuesto-otro').addEventListener('input', (event) => {
     const value = Number(event.target.value);
     setPresupuestoSeleccionado(isNaN(value) ? null : value);
   });
 }
 
 function setPresupuestoSeleccionado(value) {
-  const evento = getStoredEvento();
-  evento.evento.presupuesto = value || 0;
-  saveEvento(evento);
-
-  const botones = document.querySelectorAll('#presupuesto-opciones button');
-  botones.forEach(btn => {
-    if (btn.dataset.value === String(value)) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
+  state.evento.presupuesto = value || 0;
+  saveState();
+  document.querySelectorAll('#presupuesto-opciones button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === String(value));
   });
 }
 
 function guardarConfiguracionYContinuar() {
-  const nombre = document.getElementById('organizador-nombre').value.trim();
-  const incluido = document.getElementById('organizador-incluido').checked;
-  const tipo = document.getElementById('tipo-evento').value;
-  const nombreCelebracion = document.getElementById('celebracion-nombre').value.trim();
-  const fecha = getStoredEvento().evento.fecha || document.getElementById('fecha-otro').value;
-  const presupuesto = getStoredEvento().evento.presupuesto;
-
-  const errorElement = document.getElementById('config-error');
+  const nombre = $('organizador-nombre').value.trim();
+  const incluido = $('organizador-incluido').checked;
+  const tipo = $('tipo-evento').value;
+  const nombreCelebracion = $('celebracion-nombre').value.trim();
+  const fecha = state.evento.fecha || $('fecha-otro').value;
+  const presupuesto = state.evento.presupuesto;
+  const errorElement = $('config-error');
   errorElement.classList.add('d-none');
 
-  if (!nombre) {
-    errorElement.textContent = 'Ingresa el nombre del organizador.';
-    errorElement.classList.remove('d-none');
-    return;
-  }
+  if (!nombre) return showConfigError('Ingresa el nombre del organizador.');
+  if (!fecha) return showConfigError('Selecciona una fecha para el evento.');
+  if (!presupuesto || presupuesto <= 0) return showConfigError('Selecciona o ingresa un presupuesto valido.');
 
-  if (!fecha) {
-    errorElement.textContent = 'Selecciona una fecha para el evento.';
-    errorElement.classList.remove('d-none');
-    return;
-  }
+  state.organizador.nombre = nombre;
+  state.organizador.incluido = incluido;
+  state.evento.tipo = tipo;
+  state.evento.nombreCelebracion = tipo === 'Otro' ? nombreCelebracion : tipo;
+  state.evento.fecha = fecha;
+  state.evento.presupuesto = presupuesto;
 
-  if (!presupuesto || presupuesto <= 0) {
-    errorElement.textContent = 'Selecciona o ingresa un presupuesto válido.';
-    errorElement.classList.remove('d-none');
-    return;
-  }
-
-  const evento = getStoredEvento();
-  evento.organizador.nombre = nombre;
-  evento.organizador.incluido = incluido;
-  evento.evento.tipo = tipo;
-  evento.evento.nombreCelebracion = tipo === 'Otro' ? nombreCelebracion : tipo;
-  evento.evento.fecha = fecha;
-  evento.evento.presupuesto = presupuesto;
-
-  saveEvento(evento);
-  setEstado('Configuración guardada. Ahora agrega participantes.');
-  document.getElementById('btn-continuar-evento').classList.remove('d-none');
+  saveState();
+  setEstado('Configuracion guardada. Ahora agrega participantes.');
   mostrarPantalla('participantes');
+
+  function showConfigError(msg) {
+    errorElement.textContent = msg;
+    errorElement.classList.remove('d-none');
+  }
 }
 
 function agregarParticipante() {
-  const input = document.getElementById('participante-nombre');
+  const input = $('participante-nombre');
   const nombre = input.value.trim();
-  const errorElement = document.getElementById('participantes-error');
+  const errorElement = $('participantes-error');
   errorElement.style.display = 'none';
 
   if (!nombre) {
@@ -287,28 +325,26 @@ function agregarParticipante() {
     return;
   }
 
-  const evento = getStoredEvento();
-  const existe = evento.participantes.some(p => p.nombre.toLowerCase() === nombre.toLowerCase());
+  const existe = state.participantes.some(p => p.nombre.toLowerCase() === nombre.toLowerCase());
   if (existe) {
-    errorElement.textContent = 'El participante ya está agregado.';
+    errorElement.textContent = 'El participante ya esta agregado.';
     errorElement.style.display = 'block';
     return;
   }
 
   const id = `p-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  evento.participantes.push({ id, nombre });
-  saveEvento(evento);
+  state.participantes.push({ id, nombre });
+  saveState();
 
   input.value = '';
   renderParticipantes();
 }
 
 function renderParticipantes() {
-  const cont = document.getElementById('lista-participantes');
-  const evento = getStoredEvento();
+  const cont = $('lista-participantes');
   cont.innerHTML = '';
 
-  evento.participantes.forEach(p => {
+  state.participantes.forEach(p => {
     const card = document.createElement('div');
     card.className = 'col-12 col-sm-6 col-lg-4';
     card.innerHTML = `
@@ -322,39 +358,36 @@ function renderParticipantes() {
     cont.appendChild(card);
   });
 
-  if (evento.participantes.length === 0) {
-    cont.innerHTML = '<p class="text-muted">No hay participantes. Agregá al menos uno.</p>';
+  if (state.participantes.length === 0) {
+    cont.innerHTML = '<p class="text-muted">No hay participantes. Agrega al menos uno.</p>';
   }
 }
 
 function eliminarParticipante(id) {
-  const evento = getStoredEvento();
-  evento.participantes = evento.participantes.filter(p => p.id !== id);
-  evento.exclusiones = evento.exclusiones.filter(e => e.from !== id && e.to !== id);
-  evento.sorteo = [];
-  saveEvento(evento);
+  state.participantes = state.participantes.filter(p => p.id !== id);
+  state.exclusiones = state.exclusiones.filter(e => e.from !== id && e.to !== id);
+  state.sorteo = [];
+  saveState();
   renderParticipantes();
   renderExclusiones();
 }
 
 function continuarAExclusiones() {
-  const evento = getStoredEvento();
-  const cantidad = evento.participantes.length + (evento.organizador.incluido ? 1 : 0);
+  const cantidad = state.participantes.length + (state.organizador.incluido ? 1 : 0);
 
   if (cantidad < 2) {
-    const errorElement = document.getElementById('participantes-error');
+    const errorElement = $('participantes-error');
     errorElement.textContent = 'Se necesitan al menos 2 participantes para continuar.';
     errorElement.style.display = 'block';
     return;
   }
 
-  // Si organizador está incluido, asegurarse que esté en la lista
-  if (evento.organizador.incluido) {
-    const existeOrg = evento.participantes.some(p => p.nombre.toLowerCase() === evento.organizador.nombre.toLowerCase());
+  if (state.organizador.incluido) {
+    const existeOrg = state.participantes.some(p => p.nombre.toLowerCase() === state.organizador.nombre.toLowerCase());
     if (!existeOrg) {
       const id = `p-org-${Date.now()}`;
-      evento.participantes.unshift({ id, nombre: evento.organizador.nombre });
-      saveEvento(evento);
+      state.participantes.unshift({ id, nombre: state.organizador.nombre });
+      saveState();
     }
   }
 
@@ -362,32 +395,33 @@ function continuarAExclusiones() {
   mostrarPantalla('exclusiones');
 }
 
-function togglePanelExclusiones(show) {
-  const panel = document.getElementById('exclusiones-panel');
-  panel.classList.toggle('d-none', !show);
-  if (show) {
-    renderExclusiones();
-  }
+function togglePanelExclusiones(showFlag) {
+  const panel = $('exclusiones-panel');
+  panel.classList.toggle('d-none', !showFlag);
+  if (showFlag) renderExclusiones();
 }
 
 function renderExclusiones() {
-  const evento = getStoredEvento();
+  const radioSi = $('excl-si');
+  const radioNo = $('excl-no');
+  const panel = $('exclusiones-panel');
 
-  const tieneExcl = evento.exclusiones && evento.exclusiones.length > 0;
-  document.getElementById('excl-si').checked = tieneExcl;
-  document.getElementById('excl-no').checked = !tieneExcl;
-  document.getElementById('exclusiones-panel').classList.toggle('d-none', !tieneExcl);
+  const tieneExcl = state.exclusiones && state.exclusiones.length > 0;
+  const mostrar = radioSi.checked || tieneExcl;
 
-  const drag = document.getElementById('drag-participantes');
-  const drop = document.getElementById('drop-participantes');
-  const listado = document.getElementById('listado-exclusiones');
+  radioSi.checked = mostrar;
+  radioNo.checked = !mostrar;
+  panel.classList.toggle('d-none', !mostrar);
+
+  const drag = $('drag-participantes');
+  const drop = $('drop-participantes');
+  const listado = $('listado-exclusiones');
 
   drag.innerHTML = '';
   drop.innerHTML = '';
   listado.innerHTML = '';
 
-
-  evento.participantes.forEach(p => {
+  state.participantes.forEach(p => {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'list-group-item list-group-item-action';
@@ -409,9 +443,7 @@ function renderExclusiones() {
       e.preventDefault();
       target.classList.add('drag-over');
     });
-    target.addEventListener('dragleave', () => {
-      target.classList.remove('drag-over');
-    });
+    target.addEventListener('dragleave', () => target.classList.remove('drag-over'));
     target.addEventListener('drop', (e) => {
       e.preventDefault();
       target.classList.remove('drag-over');
@@ -422,80 +454,76 @@ function renderExclusiones() {
     drop.appendChild(target);
   });
 
-  evento.exclusiones.forEach(ex => {
-    const de = evento.participantes.find(p => p.id === ex.from)?.nombre || '???';
-    const a = evento.participantes.find(p => p.id === ex.to)?.nombre || '???';
+  state.exclusiones.forEach(ex => {
+    const de = state.participantes.find(p => p.id === ex.from)?.nombre || '???';
+    const a = state.participantes.find(p => p.id === ex.to)?.nombre || '???';
     const badge = document.createElement('span');
     badge.className = 'badge bg-secondary d-flex align-items-center gap-2';
-    badge.innerHTML = `${de} → ${a} <button type="button" class="btn-close btn-close-white btn-sm" aria-label="Eliminar" onclick="quitarExclusion('${ex.from}','${ex.to}')"></button>`;
+    badge.innerHTML = `${de} \u2192 ${a} <button type=\"button\" class=\"btn-close btn-close-white btn-sm\" aria-label=\"Eliminar\" onclick=\"quitarExclusion('${ex.from}','${ex.to}')\"></button>`;
     listado.appendChild(badge);
   });
 
-  if (evento.exclusiones.length === 0) {
-    listado.innerHTML = '<p class="text-muted">No hay exclusiones definidas aún.</p>';
+  if (state.exclusiones.length === 0) {
+    listado.innerHTML = '<p class=\"text-muted\">No hay exclusiones definidas aun.</p>';
   }
 }
 
 function agregarExclusion(fromId, toId) {
   if (!fromId || !toId || fromId === toId) return;
-  const evento = getStoredEvento();
-  const existe = evento.exclusiones.some(e => e.from === fromId && e.to === toId);
+  const existe = state.exclusiones.some(e => e.from === fromId && e.to === toId);
   if (existe) return;
-  evento.exclusiones.push({ from: fromId, to: toId });
-  evento.sorteo = [];
-  saveEvento(evento);
+  state.exclusiones.push({ from: fromId, to: toId });
+  state.sorteo = [];
+  saveState();
   renderExclusiones();
 }
 
 function quitarExclusion(fromId, toId) {
-  const evento = getStoredEvento();
-  evento.exclusiones = evento.exclusiones.filter(e => !(e.from === fromId && e.to === toId));
-  saveEvento(evento);
+  state.exclusiones = state.exclusiones.filter(e => !(e.from === fromId && e.to === toId));
+  saveState();
   renderExclusiones();
 }
 
 function guardarExclusionesYContinuar() {
-  const tieneExclusiones = document.getElementById('excl-si').checked;
-  const evento = getStoredEvento();
+  const tieneExclusiones = $('excl-si').checked;
   if (!tieneExclusiones) {
-    evento.exclusiones = [];
-    saveEvento(evento);
+    state.exclusiones = [];
+    saveState();
   }
   setEstado('Resumen listo. Podes revisar o ir al sorteo.');
   mostrarPantalla('resumen');
 }
 
 function renderResumen() {
-  const evento = getStoredEvento();
-  document.getElementById('resumen-organizador').textContent = evento.organizador.nombre;
-  document.getElementById('resumen-tipo').textContent = evento.evento.tipo;
-  document.getElementById('resumen-celebracion').textContent = evento.evento.nombreCelebracion || '---';
-  document.getElementById('resumen-fecha').textContent = evento.evento.fecha || '---';
-  document.getElementById('resumen-presupuesto').textContent = evento.evento.presupuesto ? `$${evento.evento.presupuesto}` : '---';
-  document.getElementById('resumen-participantes').textContent = evento.participantes.map(p => p.nombre).join(', ') || '---';
-  document.getElementById('resumen-exclusiones').textContent = evento.exclusiones.map(e => {
-    const de = evento.participantes.find(p => p.id === e.from)?.nombre || '???';
-    const a = evento.participantes.find(p => p.id === e.to)?.nombre || '???';
-    return `${de} → ${a}`;
+  $('resumen-organizador').textContent = state.organizador.nombre;
+  $('resumen-tipo').textContent = state.evento.tipo;
+  $('resumen-celebracion').textContent = state.evento.nombreCelebracion || '---';
+  $('resumen-fecha').textContent = state.evento.fecha || '---';
+  $('resumen-presupuesto').textContent = state.evento.presupuesto ? `$${state.evento.presupuesto}` : '---';
+  $('resumen-participantes').textContent = state.participantes.map(p => p.nombre).join(', ') || '---';
+  $('resumen-exclusiones').textContent = state.exclusiones.map(e => {
+    const de = state.participantes.find(p => p.id === e.from)?.nombre || '???';
+    const a = state.participantes.find(p => p.id === e.to)?.nombre || '???';
+    return `${de} \u2192 ${a}`;
   }).join(', ') || '---';
 }
 
 function renderSorteo() {
-  const evento = getStoredEvento();
-  const cont = document.getElementById('resultados-sorteo');
+  const cont = $('resultados-sorteo');
   cont.innerHTML = '';
-  document.getElementById('sorteo-error').classList.add('d-none');
-  if (evento.sorteo && evento.sorteo.length) {
-    evento.sorteo.forEach(pair => {
-      const giver = evento.participantes.find(p => p.id === pair.giver)?.nombre || '---';
-      const receiver = evento.participantes.find(p => p.id === pair.receiver)?.nombre || '---';
+  $('sorteo-error').classList.add('d-none');
+
+  if (state.sorteo && state.sorteo.length) {
+    state.sorteo.forEach(pair => {
+      const giver = state.participantes.find(p => p.id === pair.giver)?.nombre || '---';
+      const receiver = state.participantes.find(p => p.id === pair.receiver)?.nombre || '---';
       const card = document.createElement('div');
       card.className = 'col-12 col-md-6';
       card.innerHTML = `
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">${giver}</h5>
-            <p class="card-text">Regala a <strong>${receiver}</strong></p>
+        <div class=\"card\">
+          <div class=\"card-body\">
+            <h5 class=\"card-title\">${giver}</h5>
+            <p class=\"card-text\">Regala a <strong>${receiver}</strong></p>
           </div>
         </div>
       `;
@@ -505,44 +533,42 @@ function renderSorteo() {
 }
 
 function realizarSorteo() {
-  const evento = getStoredEvento();
-  const errorEl = document.getElementById('sorteo-error');
+  const errorEl = $('sorteo-error');
   errorEl.classList.add('d-none');
 
-  const participantes = evento.participantes.map(p => p.id);
+  const participantes = state.participantes.map(p => p.id);
   if (participantes.length < 2) {
     errorEl.textContent = 'Se necesitan al menos 2 participantes para realizar el sorteo.';
     errorEl.classList.remove('d-none');
     return;
   }
 
-  const exclusiones = new Set(evento.exclusiones.map(e => `${e.from}->${e.to}`));
-
-  const maxIntents = 5000;
+  const exclusiones = new Set(state.exclusiones.map(e => `${e.from}->${e.to}`));
+  const maxIntentos = 5000;
   let resultado = null;
 
-  for (let i = 0; i < maxIntents; i++) {
+  for (let i = 0; i < maxIntentos; i++) {
     const receivers = shuffleArray([...participantes]);
-    const conflict = participantes.some((giverId, idx) => {
+    const conflicto = participantes.some((giverId, idx) => {
       const receiverId = receivers[idx];
       if (giverId === receiverId) return true;
       if (exclusiones.has(`${giverId}->${receiverId}`)) return true;
       return false;
     });
-    if (!conflict) {
+    if (!conflicto) {
       resultado = participantes.map((giverId, idx) => ({ giver: giverId, receiver: receivers[idx] }));
       break;
     }
   }
 
   if (!resultado) {
-    errorEl.textContent = 'No fue posible generar un sorteo válido con las exclusiones actuales. Podés ajustar exclusiones o agregar más participantes.';
+    errorEl.textContent = 'No fue posible generar un sorteo valido con las exclusiones actuales. Ajusta exclusiones o agrega mas participantes.';
     errorEl.classList.remove('d-none');
     return;
   }
 
-  evento.sorteo = resultado;
-  saveEvento(evento);
+  state.sorteo = resultado;
+  saveState();
   renderSorteo();
   setEstado('Sorteo generado.');
 }
@@ -557,9 +583,12 @@ function shuffleArray(array) {
 }
 
 function resetEvento() {
-  localStorage.removeItem(STORAGE_KEY);
+  const events = loadEvents().filter(e => e.id !== state.id);
+  saveEvents(events);
+  localStorage.removeItem(CURRENT_EVENT_KEY);
+  state = createEmptyEvento();
+  saveState();
   window.location.reload();
 }
 
-// Iniciar la app
 window.addEventListener('DOMContentLoaded', init);
