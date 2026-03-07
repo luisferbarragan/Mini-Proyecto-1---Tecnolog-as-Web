@@ -31,13 +31,25 @@ function loadEvents() {
   }
 }
 
+function isEventEmpty(ev) {
+  if (!ev) return true;
+  const sinOrg = !ev.organizador?.nombre;
+  const sinParticipantes = !ev.participantes?.length;
+  const sinExclusiones = !ev.exclusiones?.length;
+  const sinSorteo = !ev.sorteo?.length;
+  const sinFecha = !ev.evento?.fecha;
+  const sinPresupuesto = !ev.evento?.presupuesto;
+  return sinOrg && sinParticipantes && sinExclusiones && sinSorteo && sinFecha && sinPresupuesto;
+}
+
 function saveEvents(events) {
   localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
 }
 
 function getStoredEvento() {
   // intenta usar el evento actual; si no hay, crea uno nuevo
-  const events = loadEvents();
+  let events = loadEvents().filter(e => !isEventEmpty(e)); // limpia basura previa
+  if (events.length !== loadEvents().length) saveEvents(events);
   const currentId = localStorage.getItem(CURRENT_EVENT_KEY);
   let found = events.find(e => e.id === currentId);
   if (!found && events.length) {
@@ -64,7 +76,7 @@ function getStoredEvento() {
 }
 
 function saveState() {
-  const events = loadEvents();
+  let events = loadEvents().filter(e => !isEventEmpty(e) || e.id === state.id);
   const idx = events.findIndex(e => e.id === state.id);
   if (idx >= 0) events[idx] = state;
   else events.push(state);
@@ -81,7 +93,8 @@ function init() {
   setupEventListeners();
   renderFechaOpciones();
   setupPresupuestoOpciones();
-  setPresupuestoSeleccionado(state.evento.presupuesto);
+  // no guardamos durante carga inicial para evitar ensuciar storage
+  setPresupuestoSeleccionado(state.evento.presupuesto, false);
 
   if (state.evento.fecha) {
     $('fecha-otro').value = state.evento.fecha;
@@ -170,7 +183,7 @@ function renderListaEventos() {
 
 function crearNuevoEvento() {
   state = createEmptyEvento();
-  saveState();
+  localStorage.setItem(CURRENT_EVENT_KEY, state.id);
   setEstado('Nuevo evento listo para configurar.');
   irAConfiguracion();
   show('eventos-guardados', false);
@@ -213,11 +226,6 @@ function renderFechaOpciones() {
       highlightFechaSeleccionada(f.value);
     });
     cont.appendChild(btn);
-
-    if (!state.evento.fecha && index === 0) {
-      selectFecha('predefinida', f.value);
-      highlightFechaSeleccionada(f.value);
-    }
   });
 
   if (state.evento.fecha) highlightFechaSeleccionada(state.evento.fecha);
@@ -274,9 +282,9 @@ function setupPresupuestoOpciones() {
   });
 }
 
-function setPresupuestoSeleccionado(value) {
+function setPresupuestoSeleccionado(value, shouldSave = true) {
   state.evento.presupuesto = value || 0;
-  saveState();
+  if (shouldSave) saveState();
   document.querySelectorAll('#presupuesto-opciones button').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.value === String(value));
   });
