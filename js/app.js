@@ -368,7 +368,7 @@ function renderParticipantes() {
 
   state.participantes.forEach(p => {
     const card = document.createElement('div');
-    card.className = 'col-12 col-sm-6 col-lg-4';
+    card.className = 'col-12 col-sm-6 col-md-4 col-lg-3';
     card.innerHTML = `
       <div class="card p-3 d-flex align-items-start">
         <div class="flex-grow-1">
@@ -540,7 +540,7 @@ function renderSorteo() {
       const giver = state.participantes.find(p => p.id === pair.giver)?.nombre || '---';
       const receiver = state.participantes.find(p => p.id === pair.receiver)?.nombre || '---';
       const card = document.createElement('div');
-      card.className = 'col-12 col-md-6';
+      card.className = 'col-12 col-md-6 col-lg-4';
       card.innerHTML = `
         <div class=\"card\">
           <div class=\"card-body\">

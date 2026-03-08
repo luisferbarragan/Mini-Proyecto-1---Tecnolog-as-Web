@@ -1,6 +1,6 @@
-# Miniproyecto 1 - Intercambio de regalos (Front-end)
+# Miniproyecto 1 - Regalin Regalon (Front-end)
 
-Sistema web de intercambio de regalos desarrollado con HTML, CSS y JavaScript.
+Sistema web de Regalin Regalon desarrollado con HTML, CSS y JavaScript.
 Incluye uso de APIs HTML5 (Drag & Drop) y LocalStorage para persistencia.
 
 ## Tecnologías
